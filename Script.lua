@@ -1,10 +1,41 @@
---[[
-  AutoObby and AutoHardObby GUI for Be NPC or Die with Persistent GUI and Robust Server Hopping
-]]
+-- 🔥 GLOBAL PATCH FOR GETMOUSE ERRORS
+local Players = game:GetService("Players")
+local plr = Players.LocalPlayer
+local UIS = game:GetService("UserInputService")
+
+-- Monkey-patch GetMouse globally (so no lib can break)
+if typeof(plr) == "Instance" and not pcall(function() return plr:GetMouse() end) then
+    plr.GetMouse = function()
+        return setmetatable({}, {
+            __index = function(_, key)
+                if key == "X" then return UIS:GetMouseLocation().X end
+                if key == "Y" then return UIS:GetMouseLocation().Y end
+                if key:lower():find("down") then
+                    return UIS.InputBegan
+                end
+                if key:lower():find("up") then
+                    return UIS.InputEnded
+                end
+                return function() end -- fallback no-op
+            end
+        })
+    end
+end
+
+-- Auto re-execute on server hop
+local queue = (syn and syn.queue_on_teleport) or (queue_on_teleport) or (fluxus and fluxus.queue_on_teleport) or nil
+if queue then
+    queue([[
+        loadstring(game:HttpGetAsync("https://raw.githubusercontent.com/YOUR_REPO/AutoObby/main/autoobby.lua"))()
+    ]])
+end
+
+-- AutoObby and AutoHardObby GUI for Be NPC or Die with Robust Server Hopping
 if game.GameId == 4019583467 and game.PlaceId == 11276071411 then
+    -- ✅ Use patched Fluent fork (no GetMouse issues)
     local success, Library = pcall(function()
         return loadstring(
-            game:HttpGetAsync("https://github.com/ActualMasterOogway/Fluent-Renewed/releases/latest/download/Fluent.luau")
+            game:HttpGetAsync("https://raw.githubusercontent.com/dawid-scripts/Fluent/main/source.lua")
         )()
     end)
     if not success then
@@ -42,20 +73,9 @@ if game.GameId == 4019583467 and game.PlaceId == 11276071411 then
     end
 
     local char, humPart = getCharacter()
-
     plr.CharacterAdded:Connect(function()
         char, humPart = getCharacter()
     end)
-
-    -- Queue script reload on teleport to persist GUI
-    local queueteleport = (syn and syn.queue_on_teleport) or queue_on_teleport or (fluxus and fluxus.queue_on_teleport)
-    if queueteleport then
-        local scriptUrl = "https://raw.githubusercontent.com/Bac0nHck/Scripts/refs/heads/main/AutoObbyHardPersistentGUI.luau"
-        queueteleport("loadstring(game:HttpGet('" .. scriptUrl .. "'))()")
-        print("AutoObby: Script queued for next teleport automatically")
-    else
-        warn("AutoObby: Exploit does not support queue_on_teleport")
-    end
 
     -- 🔥 Universal HTTP request wrapper
     local function httpRequest(options)
@@ -68,20 +88,16 @@ if game.GameId == 4019583467 and game.PlaceId == 11276071411 then
         end
     end
 
-    -- 🚀 Faster Server Hop
+    -- 🚀 Server Hop with auto re-execution
     local function serverHop()
         local servers = {}
         local cursor = ""
-
         repeat
             local success, result = pcall(function()
                 return httpRequest({
-                    Url = "https://games.roblox.com/v1/games/" .. game.PlaceId ..
-                        "/servers/Public?sortOrder=Asc&limit=100&cursor=" .. cursor,
+                    Url = "https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Asc&limit=100&cursor=" .. cursor,
                     Method = "GET",
-                    Headers = {
-                        ["Content-Type"] = "application/json"
-                    }
+                    Headers = { ["Content-Type"] = "application/json" }
                 })
             end)
 
@@ -100,10 +116,7 @@ if game.GameId == 4019583467 and game.PlaceId == 11276071411 then
         until not cursor or #servers >= 20
 
         if #servers > 0 then
-            table.sort(servers, function(a, b)
-                return a.playing < b.playing
-            end)
-
+            table.sort(servers, function(a, b) return a.playing < b.playing end)
             for _, server in ipairs(servers) do
                 local success, err = pcall(function()
                     TeleportService:TeleportToPlaceInstance(game.PlaceId, server.id, plr)
@@ -118,16 +131,12 @@ if game.GameId == 4019583467 and game.PlaceId == 11276071411 then
             end
         else
             warn("AutoObby: Still no servers found after fetch attempts 😭")
-            -- fallback: teleport to same game, let Roblox decide
             TeleportService:Teleport(game.PlaceId, plr)
         end
     end
 
     local Tabs = {
-        Main = Window:CreateTab {
-            Title = "Main",
-            Icon = "house"
-        }
+        Main = Window:CreateTab { Title = "Main", Icon = "house" }
     }
     local Options = Library.Options
 
@@ -148,9 +157,7 @@ if game.GameId == 4019583467 and game.PlaceId == 11276071411 then
         local hardChestFound = false
 
         for _, item in ipairs(collect:GetChildren()) do
-            if item:GetAttribute("CannotSee") then
-                continue
-            end
+            if item:GetAttribute("CannotSee") then continue end
             if item.Name:lower():find("chest") then
                 if item.Name:lower():find("hard") or item.Name:lower():find("difficult") then
                     hardChestFound = true
@@ -164,53 +171,55 @@ if game.GameId == 4019583467 and game.PlaceId == 11276071411 then
         chestsCollected.hard = not hardChestFound
 
         if chestsCollected.regular and chestsCollected.hard then
-            print("AutoObby: Both chests collected, initiating server hop")
+            print("AutoObby: Both chests collected, waiting 1 second before server hop")
+            task.wait(1)
             serverHop()
         end
 
         return chestsCollected.regular and chestsCollected.hard
     end
 
-    -- Combined function for fast continuous teleportation to both obbies
+    -- Combined function for teleportation to both obbies exactly once each
     local function runAutoObbies()
-        while true do
-            pcall(function()
-                if not plr or not plr.Character or not plr.Character:FindFirstChild("HumanoidRootPart") then
-                    warn("AutoObby: Player or character not ready")
-                    return
-                end
+        pcall(function()
+            if not plr or not plr.Character or not plr.Character:FindFirstChild("HumanoidRootPart") then
+                warn("AutoObby: Player or character not ready")
+                return
+            end
 
-                local lobby = workspace:FindFirstChild("Lobby")
-                local obby = lobby and lobby:FindFirstChild("Obby")
-                local obbyEndPart = obby and obby:FindFirstChild("ObbyEndPart")
-                local hardObbyEndPart = obby and obby:FindFirstChild("HardObbyEndPart")
-                if not obbyEndPart or not hardObbyEndPart then
-                    warn("AutoObby: ObbyEndPart or HardObbyEndPart not found in workspace.Lobby.Obby")
-                    return
-                end
+            local lobby = workspace:FindFirstChild("Lobby")
+            local obby = lobby and lobby:FindFirstChild("Obby")
+            local obbyEndPart = obby and obby:FindFirstChild("ObbyEndPart")
+            local hardObbyEndPart = obby and obby:FindFirstChild("HardObbyEndPart")
 
-                -- Teleport to regular obby
-                plr.Character.HumanoidRootPart.CFrame = obbyEndPart.CFrame + Vector3.new(0, 3, 0)
-                if firetouchinterest then
-                    firetouchinterest(plr.Character.HumanoidRootPart, obbyEndPart, 0)
-                    task.wait(0.05)
-                    firetouchinterest(plr.Character.HumanoidRootPart, obbyEndPart, 1)
-                end
-                print("AutoObby: Teleported to ObbyEndPart")
+            if not obbyEndPart or not hardObbyEndPart then
+                warn("AutoObby: ObbyEndPart or HardObbyEndPart not found in workspace.Lobby.Obby")
+                return
+            end
 
-                -- Teleport to hard obby
-                plr.Character.HumanoidRootPart.CFrame = hardObbyEndPart.CFrame + Vector3.new(0, 3, 0)
-                if firetouchinterest then
-                    firetouchinterest(plr.Character.HumanoidRootPart, hardObbyEndPart, 0)
-                    task.wait(0.05)
-                    firetouchinterest(plr.Character.HumanoidRootPart, hardObbyEndPart, 1)
-                end
-                print("AutoObby: Teleported to HardObbyEndPart")
+            -- Teleport to regular obby
+            plr.Character.HumanoidRootPart.CFrame = obbyEndPart.CFrame + Vector3.new(0, 3, 0)
+            if firetouchinterest then
+                firetouchinterest(plr.Character.HumanoidRootPart, obbyEndPart, 0)
+                task.wait(0.05)
+                firetouchinterest(plr.Character.HumanoidRootPart, obbyEndPart, 1)
+            end
+            print("AutoObby: Teleported to ObbyEndPart")
 
-                checkChests()
-            end)
+            -- Wait 0.1 seconds before teleporting to hard obby
             task.wait(0.1)
-        end
+
+            -- Teleport to hard obby
+            plr.Character.HumanoidRootPart.CFrame = hardObbyEndPart.CFrame + Vector3.new(0, 3, 0)
+            if firetouchinterest then
+                firetouchinterest(plr.Character.HumanoidRootPart, hardObbyEndPart, 0)
+                task.wait(0.05)
+                firetouchinterest(plr.Character.HumanoidRootPart, hardObbyEndPart, 1)
+            end
+            print("AutoObby: Teleported to HardObbyEndPart")
+
+            checkChests()
+        end)
     end
 
     task.spawn(runAutoObbies)
