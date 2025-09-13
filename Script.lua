@@ -1,6 +1,6 @@
 -- 🔥 GLOBAL PATCH FOR GETMOUSE ERRORS
 local Players = game:GetService("Players")
-local plr = Players.LocalPlayer
+local plr = Players.LocalPlayer or Players.PlayerAdded:Wait()
 local UIS = game:GetService("UserInputService")
 
 if typeof(plr) == "Instance" and not pcall(function() return plr:GetMouse() end) then
@@ -21,11 +21,11 @@ end
 local queue = (syn and syn.queue_on_teleport) or (queue_on_teleport) or (fluxus and fluxus.queue_on_teleport) or nil
 if queue then
     queue([[
-        loadstring(game:HttpGetAsync("https://raw.githubusercontent.com/RobloxRandomScripter/ss/refs/heads/main/Script.lua"))()
+        loadstring(game:HttpGetAsync("https://raw.githubusercontent.com/YOUR_REPO/AutoObby/main/autoobby.lua"))()
     ]])
 end
 
--- 🚀 Custom GUI System (replacing Fluent)
+-- 🚀 Custom GUI System (Fluent replacement)
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "AutoObbyUI"
 ScreenGui.ResetOnSpawn = false
@@ -106,19 +106,20 @@ function Window:CreateTab(args)
     return tab
 end
 
--- ✅ Keep Options for compatibility
 local Options = {}
 
 -- Roblox Services
 local TeleportService = game:GetService("TeleportService")
 local HttpService = game:GetService("HttpService")
 
--- Get Character
+-- ✅ Safe GetCharacter
 local function getCharacter()
-    local char = plr.Character or plr.CharacterAdded:Wait()
+    local player = Players.LocalPlayer or Players.PlayerAdded:Wait()
+    local char = player.Character or player.CharacterAdded:Wait()
     local humPart = char:WaitForChild("HumanoidRootPart", 5)
     return char, humPart
 end
+
 local char, humPart = getCharacter()
 plr.CharacterAdded:Connect(function()
     char, humPart = getCharacter()
@@ -198,10 +199,14 @@ local function checkChests()
     return chestsCollected.regular and chestsCollected.hard
 end
 
--- 🚀 Run AutoObbies
+-- 🚀 Run AutoObbies (safe)
 local function runAutoObbies()
     pcall(function()
-        if not plr or not plr.Character or not plr.Character:FindFirstChild("HumanoidRootPart") then return end
+        local player = Players.LocalPlayer or Players.PlayerAdded:Wait()
+        local character = player.Character or player.CharacterAdded:Wait()
+        local root = character:WaitForChild("HumanoidRootPart", 5)
+        if not root then return end
+
         local lobby = workspace:FindFirstChild("Lobby")
         local obby = lobby and lobby:FindFirstChild("Obby")
         local obbyEndPart = obby and obby:FindFirstChild("ObbyEndPart")
@@ -209,19 +214,19 @@ local function runAutoObbies()
         if not obbyEndPart or not hardObbyEndPart then return end
 
         -- Teleport to obby
-        plr.Character.HumanoidRootPart.CFrame = obbyEndPart.CFrame + Vector3.new(0, 3, 0)
+        root.CFrame = obbyEndPart.CFrame + Vector3.new(0, 3, 0)
         if firetouchinterest then
-            firetouchinterest(plr.Character.HumanoidRootPart, obbyEndPart, 0)
+            firetouchinterest(root, obbyEndPart, 0)
             task.wait(0.05)
-            firetouchinterest(plr.Character.HumanoidRootPart, obbyEndPart, 1)
+            firetouchinterest(root, obbyEndPart, 1)
         end
         task.wait(0.1)
 
-        plr.Character.HumanoidRootPart.CFrame = hardObbyEndPart.CFrame + Vector3.new(0, 3, 0)
+        root.CFrame = hardObbyEndPart.CFrame + Vector3.new(0, 3, 0)
         if firetouchinterest then
-            firetouchinterest(plr.Character.HumanoidRootPart, hardObbyEndPart, 0)
+            firetouchinterest(root, hardObbyEndPart, 0)
             task.wait(0.05)
-            firetouchinterest(plr.Character.HumanoidRootPart, hardObbyEndPart, 1)
+            firetouchinterest(root, hardObbyEndPart, 1)
         end
         checkChests()
     end)
@@ -229,7 +234,10 @@ end
 
 task.spawn(runAutoObbies)
 task.spawn(function()
-    while true do checkChests() task.wait(1) end
+    while true do
+        checkChests()
+        task.wait(1)
+    end
 end)
 
 print("AutoObby: Custom GUI initialized successfully ✅")
